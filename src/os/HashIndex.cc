@@ -549,6 +549,9 @@ int HashIndex::end_split_or_merge(const vector<string> &path) {
 
 int HashIndex::get_info(const vector<string> &path, subdir_info_s *info) {
   bufferlist buf;
+
+  // get xattr 'user.cephos.phash.contents' of the -- simon
+  // subdir (eg. /data/cache/osd70/current/5.17c_head/DIR_C/DIR_7/DIR_1/DIR_3)
   int r = get_attr_path(path, SUBDIR_ATTR, buf);
   if (r < 0)
     return r;
@@ -624,16 +627,24 @@ int HashIndex::initiate_split(const vector<string> &path, subdir_info_s info) {
 }
 
 int HashIndex::complete_split(const vector<string> &path, subdir_info_s info) {
+  
+  dout(0) << __func__ << " enter" << dendl;
   int level = info.hash_level;
   map<string, ghobject_t> objects;
   vector<string> dst = path;
   int r;
   dst.push_back("");
+
+  dout(10) << __func__ << " before list objects" << dendl;
   r = list_objects(path, 0, 0, &objects);
+  dout(10) << __func__ << " after list objects" << dendl;
   if (r < 0)
     return r;
   set<string> subdirs;
+  
+  dout(10) << __func__ << " before list subdirs" << dendl;
   r = list_subdirs(path, &subdirs);
+  dout(10) << __func__ << " after list subdirs" << dendl;
   if (r < 0)
     return r;
   map<string, map<string, ghobject_t> > mapped;
@@ -646,6 +657,9 @@ int HashIndex::complete_split(const vector<string> &path, subdir_info_s info) {
     get_path_components(i->second, &new_path);
     mapped[new_path[level]][i->first] = i->second;
   }
+
+  dout(10) << __func__ << " before main loop" << dendl;
+  int num=0;
   for (map<string, map<string, ghobject_t> >::iterator i = mapped.begin();
        i != mapped.end();
        ) {
@@ -710,7 +724,9 @@ int HashIndex::complete_split(const vector<string> &path, subdir_info_s info) {
       return r;
 
     ++i;
+    num++;
   }
+  dout(10) << __func__ << " after main loop, num=" << num << dendl;
   r = remove_objects(path, moved, &objects);
   if (r < 0)
     return r;
@@ -721,6 +737,8 @@ int HashIndex::complete_split(const vector<string> &path, subdir_info_s info) {
   r = fsync_dir(path);
   if (r < 0)
     return r;
+  
+  dout(0) << __func__ << " exit, num=" << num << dendl;
   return end_split_or_merge(path);
 }
 

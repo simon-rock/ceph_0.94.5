@@ -413,7 +413,10 @@ int LFNIndex::list_objects(const vector<string> &to_list, int max_objs,
   struct dirent *de;
   int listed = 0;
   bool end = false;
+  // it may take long here -simon
+  int num=0;
   while (!::readdir_r(dir, reinterpret_cast<struct dirent*>(buf), &de)) {
+    num++;		
     if (!de) {
       end = true;
       break;
@@ -445,7 +448,8 @@ int LFNIndex::list_objects(const vector<string> &to_list, int max_objs,
       }
     }
   }
-
+  dout(10) << __func__ << " after readdir_r " << to_list_path.c_str() << ", num: " << num << dendl;
+  
   if (handle && !end) {
     *handle = telldir(dir);
   }
@@ -466,7 +470,10 @@ int LFNIndex::list_subdirs(const vector<string> &to_list,
     return -errno;
 
   struct dirent *de;
+  // it may take long here --simon
+  int num=0;
   while (!::readdir_r(dir, reinterpret_cast<struct dirent*>(buf), &de)) {
+    num++;
     if (!de) {
       break;
     }
@@ -477,7 +484,7 @@ int LFNIndex::list_subdirs(const vector<string> &to_list,
       out->insert(demangled_name);
     }
   }
-
+  dout(10) << __func__ << " after readdir_r " << to_list_path.c_str() <<", num: "<< num << dendl;
   ::closedir(dir);
   return 0;
 }
@@ -745,6 +752,8 @@ int LFNIndex::lfn_get_name(const vector<string> &path,
       struct stat buf;
       string full_path = get_full_path(path, full_name);
       maybe_inject_failure();
+      // cost time ?
+      dout(10) << __func__ << "before ::stat(" << full_name.c_str() << ")" << dendl;")"
       r = ::stat(full_path.c_str(), &buf);
       if (r < 0) {
 	if (errno == ENOENT)
@@ -937,6 +946,7 @@ int LFNIndex::lfn_translate(const vector<string> &path,
 			    ghobject_t *out)
 {
   if (!lfn_is_hashed_filename(short_name)) {
+    // get here since length of short_name is less than 255 --simon
     return lfn_parse_object_name(short_name, out);
   }
   // Get lfn_attr
@@ -1340,19 +1350,23 @@ string LFNIndex::demangle_path_component(const string &component)
   return component.substr(SUBDIR_PREFIX.size(), component.size() - SUBDIR_PREFIX.size());
 }
 
+// eg. in       : /data/cache/osd70/current/5.17ce_head/DIR_E/DIR_C/DIR_7/DIR_3/objname1__head_68BB37CE__5 
+//     out      : E C 7 3
+//     oid      : the ghobject_t object pointing to the object;
+//     shortname: objname1__head_68BB37CE__5
 int LFNIndex::decompose_full_path(const char *in, vector<string> *out,
 				  ghobject_t *oid, string *shortname)
 {
-  const char *beginning = in + get_base_path().size();
+  const char *beginning = in + get_base_path().size();    // base_path is /data/cache/osd70/current/5.17ce_head, so start at /DIR_E/...
   const char *end = beginning;
   while (1) {
     end++;
     beginning = end++;
     for ( ; *end != '\0' && *end != '/'; ++end) ;
-    if (*end != '\0') {
+    if (*end != '\0') {                                  // *end is '/'
       out->push_back(demangle_path_component(string(beginning, end - beginning)));
       continue;
-    } else {
+    } else {                                             // *end is '\0'
       break;
     }
   }

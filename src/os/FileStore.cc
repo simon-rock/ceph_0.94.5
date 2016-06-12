@@ -3555,8 +3555,9 @@ void FileStore::sync_entry()
       {
 	apply_manager.commit_started();
 	op_tp.unpause();
-
+	dout(10) << __func__ << " before sync fs" << dendl;
 	int err = backend->syncfs();
+	dout(10) << __func__ << " after sync fs" << dendl;
 	if (err < 0) {
 	  derr << "syncfs got " << cpp_strerror(err) << dendl;
 	  assert(0 == "syncfs returned error");
