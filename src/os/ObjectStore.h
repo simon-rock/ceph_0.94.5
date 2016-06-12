@@ -69,6 +69,8 @@ enum {
   l_os_bytes,
   l_os_apply_lat,
   l_os_queue_lat,
+  l_os_fdcache_hit,
+  l_os_fdcache_miss,
   l_os_last,
 };
 
