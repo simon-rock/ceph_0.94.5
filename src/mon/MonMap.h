@@ -44,11 +44,11 @@ class MonMap {
    */
   epoch_t epoch;       // what epoch/version of the monmap
   uuid_d fsid;
-  map<string, entity_addr_t> mon_addr;
+  map<string, entity_addr_t> mon_addr;   //from name to addr  --simon
   utime_t last_changed;
   utime_t created;
 
-  map<entity_addr_t,string> addr_name;
+  map<entity_addr_t,string> addr_name;   //from addr to name  --simon
   vector<string> rank_name;
   vector<entity_addr_t> rank_addr;
 
@@ -60,10 +60,10 @@ class MonMap {
 	 p != mon_addr.end();
 	 ++p) {
       assert(addr_name.count(p->second) == 0);
-      addr_name[p->second] = p->first;
+      addr_name[p->second] = p->first;          //swith mon_addr (from name to addr), we get addr_name (from addr to name)  --simon
     }
     unsigned i = 0;
-    for (map<entity_addr_t,string>::iterator p = addr_name.begin();
+    for (map<entity_addr_t,string>::iterator p = addr_name.begin();   // map is ordered, so rank is the position in the sorted map; --simon
 	 p != addr_name.end();
 	 ++p, i++) {
       rank_name[i] = p->second;

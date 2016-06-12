@@ -2510,6 +2510,13 @@ void Monitor::set_leader_supported_commands(const MonCommand *cmds, int size)
   leader_supported_mon_commands_size = size;
 }
 
+//in our environment,
+//        ; auth supported = cephx            ---> auth_supported.empty() is true
+//        auth cluster required = none
+//        auth service required = none
+//        auth client required = none
+//
+//so, is_keyring_required() return false;     -- simon
 bool Monitor::is_keyring_required()
 {
   string auth_cluster_required = g_conf->auth_supported.empty() ?
