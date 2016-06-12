@@ -622,7 +622,7 @@ class MonitorDBStore
     string full_path = os.str();
 
     KeyValueDB *db_ptr = KeyValueDB::create(g_ceph_context,
-					    g_conf->mon_keyvaluedb,
+					    g_conf->mon_keyvaluedb,    // by default, mon_keyvaluedb = "leveldb"  --simon
 					    full_path);
     if (!db_ptr) {
       derr << __func__ << " error initializing "

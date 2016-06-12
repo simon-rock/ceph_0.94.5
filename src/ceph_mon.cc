@@ -297,7 +297,7 @@ int main(int argc, const char **argv)
 	 << "break your mon cluster.  pass --yes-i-really-mean-it if you do." << std::endl;
     exit(1);
   }
-
+  //by default, mon_data = "/var/lib/ceph/mon/mon.{id}"
   if (g_conf->mon_data.empty()) {
     cerr << "must specify '--mon-data=foo' data path" << std::endl;
     usage();
