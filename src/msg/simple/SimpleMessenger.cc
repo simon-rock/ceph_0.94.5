@@ -43,7 +43,7 @@ SimpleMessenger::SimpleMessenger(CephContext *cct, entity_name_t name,
     accepter(this, _nonce),
     dispatch_queue(cct, this),
     reaper_thread(this),
-    nonce(_nonce),
+    nonce(_nonce),     // initial value is 0 for mon, thread pid for osd; increased by 1000000 when each rebind     --simon
     lock("SimpleMessenger::lock"), need_addr(true), did_bind(false),
     global_seq(0),
     cluster_protocol(0),

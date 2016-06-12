@@ -4537,6 +4537,7 @@ int Monitor::mkfs(bufferlist& osdmapbl)
     KeyRing keyring;
     string keyring_filename;
     if (!ceph_resolve_file_search(g_conf->keyring, keyring_filename)) {
+      //unable to find a keyring file, so generate one if g_conf->key is not "";    --simon
       derr << "unable to find a keyring file on " << g_conf->keyring << dendl;
       if (g_conf->key != "") {
 	string keyring_plaintext = "[mon.]\n\tkey = " + g_conf->key +

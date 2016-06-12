@@ -572,7 +572,7 @@ int main(int argc, const char **argv)
     if (global_init_prefork(g_ceph_context, 0) >= 0) {
       prefork.prefork();
       if (prefork.is_parent()) {
-	return prefork.parent_wait();
+	return prefork.parent_wait();    // when child process notity, parent return from main func;     --simon
       }
       global_init_postfork_start(g_ceph_context);
     }
@@ -682,15 +682,18 @@ int main(int argc, const char **argv)
   entity_addr_t ipaddr;
 
   if (monmap.contains(g_conf->name.get_id())) {
+    // get ip addr from monmap;   -- simon
     ipaddr = monmap.get_addr(g_conf->name.get_id());
 
     // print helpful warning if the conf file doesn't match
+    // get ip addr from ceph.conf   --simon
     entity_addr_t conf_addr;
     std::vector <std::string> my_sections;
     g_conf->get_my_sections(my_sections);
     std::string mon_addr_str;
     if (g_conf->get_val_from_conf_file(my_sections, "mon addr",
 				       mon_addr_str, true) == 0) {
+      // if ip addr got from monmap and that got from ceph.conf don't match; --simon
       if (conf_addr.parse(mon_addr_str.c_str()) && (ipaddr != conf_addr)) {
 	derr << "WARNING: 'mon addr' config option " << conf_addr
 	     << " does not match monmap file" << std::endl
@@ -728,7 +731,7 @@ int main(int argc, const char **argv)
 
   // bind
   int rank = monmap.get_rank(g_conf->name.get_id());
-  Messenger *msgr = Messenger::create(g_ceph_context, g_conf->ms_type,
+  Messenger *msgr = Messenger::create(g_ceph_context, g_conf->ms_type,  // ms_type is "simple" by default for mon and osd"    --simon
 				      entity_name_t::MON(rank),
 				      "mon",
 				      0);
@@ -831,7 +834,7 @@ int main(int argc, const char **argv)
   if (g_conf->inject_early_sigterm)
     kill(getpid(), SIGTERM);
 
-  msgr->wait();
+  msgr->wait();                      // main thread is blocked at wait()-->dispatch_queue.wait();     --simon
 
   store->close();
 
