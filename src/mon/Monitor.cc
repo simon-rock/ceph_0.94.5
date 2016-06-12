@@ -4497,7 +4497,42 @@ int Monitor::mkfs(bufferlist& osdmapbl)
     }
     t->put("mkfs", "osdmap", osdmapbl);
   }
-
+  //for mkfs
+  //    ceph-mon -c ceph.conf --mkfs -i {mon-id} --monmap {monmap-file} --osdmap {osdmap-file} -k {keyring.mon-file}
+  //g_conf->keyring points to the file {keyring.mon-file}, see parse_argv();
+  //{keyring.mon-file} is a file like:
+  //                  [mon.]
+  //                         key = AQCEQw9XTO9lKBAA0QNDoO2TUaQDN2BkDGbw7w==
+  //                         caps mon = "allow *"
+  //                  [osd.0]
+  //                         key = AQXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX==
+  //                         caps mds = "allow"
+  //                         caps mon = "allow rwx"
+  //                         caps osd = "allow *"
+  //                  [osd.1]
+  //                         key = AQYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY==
+  //                         caps mds = "allow"
+  //                         caps mon = "allow rwx"
+  //                         caps osd = "allow *"
+  //                  [osd.2]
+  //                         key = AQCoHw5XjyQaGxAADBR8AFk7ppzDEU/q3tAjxQ==
+  //                         caps mds = "allow"
+  //                         caps mon = "allow rwx"
+  //                         caps osd = "allow *"
+  //                   ......
+  //                  [mds.0]
+  //                         key = AQZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ==
+  //                         caps mds = "allow"
+  //                         caps mon = "allow rwx"
+  //                         caps osd = "allow *"
+  //                   ......
+  //                  [client.admin]
+  //                         key = AQAVQg9XlZYSABAA/ZFg6S3qkwskN5b1kDZ7dg==
+  //                         auid = 0
+  //                         caps mds = "allow"
+  //                         caps mon = "allow *"
+  //                         caps osd = "allow *"
+  // --simon
   if (is_keyring_required()) {
     KeyRing keyring;
     string keyring_filename;
