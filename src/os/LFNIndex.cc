@@ -413,7 +413,7 @@ int LFNIndex::list_objects(const vector<string> &to_list, int max_objs,
   struct dirent *de;
   int listed = 0;
   bool end = false;
-  // it may take long here -simon
+  // it may take long here --simon
   int num=0;
   while (!::readdir_r(dir, reinterpret_cast<struct dirent*>(buf), &de)) {
     num++;		
@@ -733,16 +733,22 @@ string LFNIndex::lfn_generate_object_name_poolless(const ghobject_t &oid)
   full_name += string(snap_with_hash);
   return full_name;
 }
-
+// generate the file name to store the object data;
+//note that the real name of the object is different from the file name; the real name looks
+//like "objname1__head_68BB37CE__5";
+//     case1: if the real name is short(<255), the file name is the same as it;
+//     case2: if the real name is long(>=255), the file name is built from the real name and its hash value (note the hash value here
+//            is different from the hash in the real name, 68BB37CE in the example);     --simon
 int LFNIndex::lfn_get_name(const vector<string> &path, 
 			   const ghobject_t &oid,
 			   string *mangled_name, string *out_path,
 			   int *exists)
 {
   string subdir_path = get_full_path_subdir(path);
-  string full_name = lfn_generate_object_name(oid);
+  string full_name = lfn_generate_object_name(oid);     // variable "full_name" is the real name of the object;"  --simon
   int r;
 
+  // case1  -simon
   if (!lfn_must_hash(full_name)) {
     if (mangled_name)
       *mangled_name = full_name;
@@ -767,6 +773,15 @@ int LFNIndex::lfn_get_name(const vector<string> &path,
     return 0;
   }
 
+  // case2
+  //full_name is the real name; different real name of the objects may be converted to the same file name by function lfn_get_short_name (though )
+  //the possibility is very low); thus 'i' is introducted the resolve the conflict;
+  //for example:
+  //    real_name "XXXXXXXXXXYY__head_89C245FA__5" is converted to file name XXXXXXXXXX_3F451DA34F_0_long, thus xattr lfn_attribute of 
+  //    file XXXXXXXXXX_3F451DA34F_0_long is set to XXXXXXXXXXYY__head_89C245FA__5 (see function created)
+  //    and real_name "XXXXXXXXXXZZ__head_328AD34F__5" is initially converted to the same file name (XXXXXXXXXX_3F451DA34F_0_long), but neith of the xattr 
+  //    lfn_attribute and lfn_alt_attribute of file XXXXXXXXXX_3F451DA34F_0_long matches with "XXXXXXXXXXZZ__head_328AD34F__5", so i++ and 
+  //    "XXXXXXXXXXZZ__head_328AD34F__5" is finally converted to XXXXXXXXXX_3F451DA34F_1_long;"         --simon
   int i = 0;
   string candidate;
   string candidate_path;
@@ -814,7 +829,7 @@ int LFNIndex::lfn_get_name(const vector<string> &path,
       int rc = ::stat(candidate_path.c_str(), &st);
       if (rc < 0)
 	return -errno;
-      if (st.st_nlink <= 1) {
+      if (st.st_nlink <= 1) {                // number of hard links <= 1 --simon
 	// left over from incomplete unlink, remove
 	maybe_inject_failure();
 	dout(20) << __func__ << " found extra alt attr for " << candidate_path
@@ -877,6 +892,7 @@ int LFNIndex::lfn_unlink(const vector<string> &path,
 			 const ghobject_t &oid,
 			 const string &mangled_name)
 {
+  //case1, if the file name (the file stores the object data) is the same as object real name;
   if (!lfn_is_hashed_filename(mangled_name)) {
     string full_path = get_full_path(path, mangled_name);
     maybe_inject_failure();
@@ -888,16 +904,16 @@ int LFNIndex::lfn_unlink(const vector<string> &path,
   }
   string subdir_path = get_full_path_subdir(path);
   
-  
+  //case2, if the file name is different from the real name (because real name is too long, longer than 255, see LFNIndex::lfn_get_name)  --simon
   int i = 0;
-  for ( ; ; ++i) {
+  for ( ; ; ++i) {         // find the file that sotres the object to unlink, say XXXXXXXXXX_3F451DA34F_5_long, then i=5 when break --simon
     string candidate = lfn_get_short_name(oid, i);
     if (candidate == mangled_name)
       break;
   }
   int removed_index = i;
   ++i;
-  for ( ; ; ++i) {
+  for ( ; ; ++i) {        // find the XXXXXXXXXX_3F451DA34F_{i}_long that doesn't exist, with the least i (i>=6)        --simon
     struct stat buf;
     string to_check = lfn_get_short_name(oid, i);
     string to_check_path = get_full_path(path, to_check);
@@ -916,12 +932,15 @@ int LFNIndex::lfn_unlink(const vector<string> &path,
     return -errno;
   FDCloser f(fd);
   if (i == removed_index + 1) {
+    // i=6, that is to say XXXXXXXXXX_3F451DA34F_6_long doesn't exist, unlink XXXXXXXXXX_3F451DA34F_5_long directly       --simon
     maybe_inject_failure();
     int r = ::unlink(full_path.c_str());
     maybe_inject_failure();
     if (r < 0)
       return -errno;
   } else {
+    // i>6, e.g. XXXXXXXXXX_3F451DA34F_6_long and XXXXXXXXXX_3F451DA34F_7_long exist and XXXXXXXXXX_3F451DA34F_8_long doesn't exist, rename
+    //XXXXXXXXXX_3F451DA34F_8_long to XXXXXXXXXX_3F451DA34F_5_long     --simon
     string& rename_to = full_path;
     string rename_from = get_full_path(path, lfn_get_short_name(oid, i - 1));
     maybe_inject_failure();
@@ -941,18 +960,24 @@ int LFNIndex::lfn_unlink(const vector<string> &path,
   return r;
 }
 
+// get the object from the name of the file which stores the object data;
+//note that the real name of the object is different from the name of the file which stores the object data; the real name
+//looks like "objname1__head_68BB37CE__5" from which the object can be constructed;
+//     case1: if the real name is short (<255), the file name is the same as it; so construct the object from the file name;
+//     case2: if the real name is long (>=255), the file name is built from the real name and its hash value; in this case,
+//            the real name is stored in xattr "lfn_attribute" of the file; so get the real name from xattr and construct the object;     --simon
+//param short_name is the input file name;
 int LFNIndex::lfn_translate(const vector<string> &path,
 			    const string &short_name,
 			    ghobject_t *out)
 {
-  if (!lfn_is_hashed_filename(short_name)) {
-    // get here since length of short_name is less than 255 --simon
+  if (!lfn_is_hashed_filename(short_name)) {       // get here since length of short_name is less than 255 --simon
     return lfn_parse_object_name(short_name, out);
   }
   // Get lfn_attr
   string full_path = get_full_path(path, short_name);
   char attr[PATH_MAX];
-  int r = chain_getxattr(full_path.c_str(), get_lfn_attr().c_str(), attr, sizeof(attr) - 1);
+  int r = chain_getxattr(full_path.c_str(), get_lfn_attr().c_str(), attr, sizeof(attr) - 1);      // case2, get the real name of object from xattr;
   if (r < 0)
     return -errno;
   if (r < (int)sizeof(attr))

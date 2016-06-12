@@ -95,6 +95,8 @@ static void build_filename(char *filename, int len, const char *old_filename, in
 
   hash_filename(old_filename, hash, sizeof(hash));
   int ofs = FILENAME_PREFIX_LEN;
+  // we need a loop here because i may be more than one digit; in that case, shift the _{hash}_{i}_long
+  //suffix left to make sure the length of filename <= FILENAME_SHORT_LEN; -- simon
   while (1) {
     int suffix_len = sprintf(filename + ofs, "_%s_%d_" FILENAME_COOKIE, hash, i);
     if (ofs + suffix_len <= FILENAME_SHORT_LEN || !ofs)
@@ -114,6 +116,8 @@ static int lfn_is_hashed_filename(const char *filename)
 
 static void lfn_translate(const char *path, const char *name, char *new_name, int len)
 {
+  // if name is not built by hash, no need to translate; else, the real name is saved in
+  //xattr LFN_ATTR of the file; see function lfn_get(); -- simon
   if (!lfn_is_hashed_filename(name)) {
     strncpy(new_name, name, len);
     return;
@@ -214,9 +218,9 @@ static int lfn_get(const char *coll_path, const ghobject_t& oid, char *pathname,
   char *filename = pathname + path_len;
 
   *lfn = '\0';
-  int actual_len = append_oname(oid, lfn, lfn_len);
+  int actual_len = append_oname(oid, lfn, lfn_len); // get the real name of the object; -- simon
 
-  if (actual_len < (int)FILENAME_PREFIX_LEN) {
+  if (actual_len < (int)FILENAME_PREFIX_LEN) {      // if real name is short, it's used as filename directly; -- simon
     /* not a long file name, just build it as it is */
     strncpy(filename, lfn, len - path_len);
     *is_lfn = 0;
@@ -234,7 +238,8 @@ static int lfn_get(const char *coll_path, const ghobject_t& oid, char *pathname,
 
     return 0;
   }
-
+  // real name is not short, build filename by hash below; -- simon
+  
   *is_lfn = 1;
   *exist = 0;
 
@@ -242,6 +247,14 @@ static int lfn_get(const char *coll_path, const ghobject_t& oid, char *pathname,
     char buf[PATH_MAX];
     int r;
 
+    //'lfn' is the real name of the object; however, different object names may be converted to the same 'filename' by function build_filename (though
+    //the possibility is very low); thus 'i' is introducted the resolve the conflict;
+    //for example:
+    //    lfn1 XXXXXXXXX1234 is converted to XXXXXXXXXX_3F451DA34F_0_long, thus xattr LFN_ATTR of file XXXXXXXXXX_3F451DA34F_0_long is set
+    //    to XXXXXXXXX1234 (see FlatIndex::created)
+    //    and lfn2 XXXXXXXXXABCD is initially converted to the same 'filename' (XXXXXXXXXX_3F451DA34F_0_long), but the xattr LFN_ATTR of
+    //    XXXXXXXXXX_3F451DA34F_0_long is XXXXXXXXX1234 which doesn't match with XXXXXXXXXABCD, so i++ and XXXXXXXXXABCD is finally converted
+    //    to XXXXXXXXXX_3F451DA34F_1_long; --simon
     build_filename(filename, len - path_len, lfn, i);
     r = chain_getxattr(pathname, LFN_ATTR, buf, sizeof(buf));
     if (r < 0)
@@ -300,13 +313,14 @@ int FlatIndex::unlink(const ghobject_t &o) {
 	      long_fn, sizeof(long_fn), &exist, &is_lfn);
   if (r < 0)
     return r;
-  if (!is_lfn) {
+  if (!is_lfn) {          // if the filename is not built by hash of real name of the object, unlink it directly; --simon
     r = ::unlink(short_fn);
     if (r < 0) {
       return -errno;
     }
     return 0;
   }
+  // if the filename is built by hash of real name of the object to unlink, e.g. XXXXXXXXXX_3F451DA34F_5_long --simon
   if (!exist)
     return -ENOENT;
 
@@ -323,7 +337,7 @@ int FlatIndex::unlink(const ghobject_t &o) {
     build_filename(&short_fn2[path_len], sizeof(short_fn2) - path_len, long_fn, i);
     ret = ::stat(short_fn2, &buf);
     if (ret < 0) {
-      if (i == r + 1) {
+      if (i == r + 1) {                   // XXXXXXXXXX_3F451DA34F_6_long doesn't exist, so XXXXXXXXXX_3F451DA34F_5_long can be unlinked directly;
         err = ::unlink(short_fn);
         if (err < 0)
           return err;
@@ -333,6 +347,8 @@ int FlatIndex::unlink(const ghobject_t &o) {
     }
   }
 
+  // XXXXXXXXXX_3F451DA34F_6_long and XXXXXXXXXX_3F451DA34F_7_long exist but XXXXXXXXXX_3F451DA34F_8_long doesn't exist, then
+  // rename XXXXXXXXXX_3F451DA34F_7_long to XXXXXXXXXX_3F451DA34F_5_long
   build_filename(&short_fn2[path_len], sizeof(short_fn2) - path_len, long_fn, i - 1);
 
   if (rename(short_fn2, short_fn) < 0) {
