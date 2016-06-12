@@ -402,6 +402,7 @@ int HashIndex::pre_split_folder(uint32_t pg_num, uint64_t expected_num_objs)
 
   int ret;
   // Start with creation that only has one subfolder
+  // the bigger pg_num is, the more bits pg_num has, the more folders that have only on subfolder 
   vector<string> paths;
   int dump_num = num;                         // dump_num = 3 --simon
   while (num-- > 0) {
