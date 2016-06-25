@@ -2510,6 +2510,13 @@ void Monitor::set_leader_supported_commands(const MonCommand *cmds, int size)
   leader_supported_mon_commands_size = size;
 }
 
+//in our environment,
+//        ; auth supported = cephx            ---> auth_supported.empty() is true
+//        auth cluster required = none
+//        auth service required = none
+//        auth client required = none
+//
+//so, is_keyring_required() return false;     -- simon
 bool Monitor::is_keyring_required()
 {
   string auth_cluster_required = g_conf->auth_supported.empty() ?
@@ -4490,11 +4497,47 @@ int Monitor::mkfs(bufferlist& osdmapbl)
     }
     t->put("mkfs", "osdmap", osdmapbl);
   }
-
+  //for mkfs
+  //    ceph-mon -c ceph.conf --mkfs -i {mon-id} --monmap {monmap-file} --osdmap {osdmap-file} -k {keyring.mon-file}
+  //g_conf->keyring points to the file {keyring.mon-file}, see parse_argv();
+  //{keyring.mon-file} is a file like:
+  //                  [mon.]
+  //                         key = AQCEQw9XTO9lKBAA0QNDoO2TUaQDN2BkDGbw7w==
+  //                         caps mon = "allow *"
+  //                  [osd.0]
+  //                         key = AQXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX==
+  //                         caps mds = "allow"
+  //                         caps mon = "allow rwx"
+  //                         caps osd = "allow *"
+  //                  [osd.1]
+  //                         key = AQYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY==
+  //                         caps mds = "allow"
+  //                         caps mon = "allow rwx"
+  //                         caps osd = "allow *"
+  //                  [osd.2]
+  //                         key = AQCoHw5XjyQaGxAADBR8AFk7ppzDEU/q3tAjxQ==
+  //                         caps mds = "allow"
+  //                         caps mon = "allow rwx"
+  //                         caps osd = "allow *"
+  //                   ......
+  //                  [mds.0]
+  //                         key = AQZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ==
+  //                         caps mds = "allow"
+  //                         caps mon = "allow rwx"
+  //                         caps osd = "allow *"
+  //                   ......
+  //                  [client.admin]
+  //                         key = AQAVQg9XlZYSABAA/ZFg6S3qkwskN5b1kDZ7dg==
+  //                         auid = 0
+  //                         caps mds = "allow"
+  //                         caps mon = "allow *"
+  //                         caps osd = "allow *"
+  // --simon
   if (is_keyring_required()) {
     KeyRing keyring;
     string keyring_filename;
     if (!ceph_resolve_file_search(g_conf->keyring, keyring_filename)) {
+      //unable to find a keyring file, so generate one if g_conf->key is not "";    --simon
       derr << "unable to find a keyring file on " << g_conf->keyring << dendl;
       if (g_conf->key != "") {
 	string keyring_plaintext = "[mon.]\n\tkey = " + g_conf->key +

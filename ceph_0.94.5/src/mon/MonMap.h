@@ -27,13 +27,28 @@ namespace ceph {
 
 class MonMap {
  public:
+  /*
+   * an example of monmap
+   *
+   * # ceph mon getmap -o mon_map
+   * got monmap epoch 1
+   * # monmaptool --print mon_map
+   * monmaptool: monmap file mon_map
+   * epoch 1
+   * fsid 1452e678-68f7-4536-ab14-11b80ad02ead
+   * last_changed 2016-01-21 14:12:14.102601
+   * created 2016-01-21 14:12:14.102601
+   * 0: 10.21.44.48:6789/0 mon.c
+   * 1: 10.21.44.49:6789/0 mon.a
+   * 2: 10.21.44.56:6789/0 mon.b
+   */
   epoch_t epoch;       // what epoch/version of the monmap
   uuid_d fsid;
-  map<string, entity_addr_t> mon_addr;
+  map<string, entity_addr_t> mon_addr;   //from name to addr  --simon
   utime_t last_changed;
   utime_t created;
 
-  map<entity_addr_t,string> addr_name;
+  map<entity_addr_t,string> addr_name;   //from addr to name  --simon
   vector<string> rank_name;
   vector<entity_addr_t> rank_addr;
 
@@ -45,10 +60,10 @@ class MonMap {
 	 p != mon_addr.end();
 	 ++p) {
       assert(addr_name.count(p->second) == 0);
-      addr_name[p->second] = p->first;
+      addr_name[p->second] = p->first;          //swith mon_addr (from name to addr), we get addr_name (from addr to name)  --simon
     }
     unsigned i = 0;
-    for (map<entity_addr_t,string>::iterator p = addr_name.begin();
+    for (map<entity_addr_t,string>::iterator p = addr_name.begin();   // map is ordered, so rank is the position in the sorted map; --simon
 	 p != addr_name.end();
 	 ++p, i++) {
       rank_name[i] = p->second;

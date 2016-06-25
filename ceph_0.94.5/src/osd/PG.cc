@@ -2750,6 +2750,8 @@ void PG::_init(ObjectStore::Transaction& t, spg_t pgid, const pg_pool_t *pool)
   coll_t coll(pgid);
 
   if (pool) {
+    //pre-split the PG (create folders to store files); this works only when
+    //filestore_merge_threshold is negative; see HashIndex::pre_split_folder()          -- simon
     // Give a hint to the PG collection
     bufferlist hint;
     uint32_t pg_num = pool->get_pg_num();

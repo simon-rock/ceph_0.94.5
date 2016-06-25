@@ -254,16 +254,22 @@ int FileStore::lfn_open(coll_t cid,
 
   int fd, exist;
   assert(NULL != (*index).index);
-  if (need_lock) {
+  if(need_lock) {
     ((*index).index)->access_lock.get_write();
   }
   if (!replaying) {
     *outfd = fdcache.lookup(oid);
     if (*outfd) {
+      logger->inc(l_os_fdcache_hit);
+      dout(10) << __func__ << " " << oid << " fdcache hit" << dendl;
       if (need_lock) {
         ((*index).index)->access_lock.put_write();
       }
       return 0;
+    }
+    else{
+      dout(10) << __func__ << " " << oid << " fdcache missed" << dendl;
+      logger->inc(l_os_fdcache_miss);
     }
   }
 
@@ -603,6 +609,9 @@ FileStore::FileStore(const std::string &base, const std::string &jdev, osflagbit
   plb.add_u64_counter(l_os_j_full, "journal_full");
   plb.add_time_avg(l_os_queue_lat, "queue_transaction_latency_avg");
 
+  plb.add_u64_counter(l_os_fdcache_hit, "fdcache_hit_counter");
+  plb.add_u64_counter(l_os_fdcache_miss, "fdcache_miss_counter");
+  
   logger = plb.create_perf_counters();
 
   g_ceph_context->get_perfcounters_collection()->add(logger);
@@ -3546,8 +3555,9 @@ void FileStore::sync_entry()
       {
 	apply_manager.commit_started();
 	op_tp.unpause();
-
+	dout(10) << __func__ << " before sync fs" << dendl;
 	int err = backend->syncfs();
+	dout(10) << __func__ << " after sync fs" << dendl;
 	if (err < 0) {
 	  derr << "syncfs got " << cpp_strerror(err) << dendl;
 	  assert(0 == "syncfs returned error");

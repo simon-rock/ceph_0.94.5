@@ -125,7 +125,7 @@ void global_init(std::vector < const char * > *alt_def_args,
 
   if (g_conf->log_flush_on_exit)
     g_ceph_context->_log->set_flush_on_exit();
-
+  // by default, run_dir = "/var/run/ceph"   -- simon
   if (g_conf->run_dir.length() &&
       code_env == CODE_ENVIRONMENT_DAEMON &&
       !(flags & CINIT_FLAG_NO_DAEMON_ACTIONS)) {

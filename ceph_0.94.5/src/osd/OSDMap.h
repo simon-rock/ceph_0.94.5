@@ -87,7 +87,42 @@ struct osd_info_t {
 WRITE_CLASS_ENCODER(osd_info_t)
 
 ostream& operator<<(ostream& out, const osd_info_t& info);
-
+/** OSDMap
+ */
+/* an osdmap looks like this:
+ *
+ * # ceph osd getmap -o osdmap
+ * got osdmap epoch 52
+ *
+ * # osdmaptool --print osdmap
+ * osdmaptool: osdmap file 'osdmap'
+ * epoch 52
+ * fsid 722453cc-edda-486b-b4e5-9b643427290f
+ * created 2016-04-13 18:30:19.681749
+ * modified 2016-04-13 18:34:21.839896
+ * flags
+ *
+ * pool 1 '.rgw' replicated size 2 min_size 1 crush_ruleset 0 object_hash rjenkins pg_num 60 pgp_num 60 last_change 14 flags hashpspool stripe_width 0
+ * pool 2 '.rgw.root' replicated size 2 min_size 1 crush_ruleset 0 object_hash rjenkins pg_num 60 pgp_num 60 last_change 19 flags hashpspool stripe_width 0
+ * pool 3 '.rgw.control' replicated size 2 min_size 1 crush_ruleset 0 object_hash rjenkins pg_num 60 pgp_num 60 last_change 23 flags hashpspool stripe_width 0
+ * pool 4 '.rgw.gc' replicated size 2 min_size 1 crush_ruleset 0 object_hash rjenkins pg_num 60 pgp_num 60 last_change 27 flags hashpspool stripe_width 0
+ * pool 5 '.rgw.buckets' replicated size 3 min_size 1 crush_ruleset 0 object_hash rjenkins pg_num 1000 pgp_num 1000 last_change 31 flags hashpspool stripe_width 0 expected_num_objects 4096000000
+ * pool 6 '.rgw.buckets.index' replicated size 2 min_size 1 crush_ruleset 0 object_hash rjenkins pg_num 60 pgp_num 60 last_change 35 flags hashpspool stripe_width 0
+ * pool 7 '.users' replicated size 2 min_size 1 crush_ruleset 0 object_hash rjenkins pg_num 60 pgp_num 60 last_change 39 flags hashpspool stripe_width 0
+ * pool 8 '.users.email' replicated size 2 min_size 1 crush_ruleset 0 object_hash rjenkins pg_num 60 pgp_num 60 last_change 43 flags hashpspool stripe_width 0
+ * pool 9 '.users.swift' replicated size 2 min_size 1 crush_ruleset 0 object_hash rjenkins pg_num 60 pgp_num 60 last_change 47 flags hashpspool stripe_width 0
+ * pool 10 '.users.uid' replicated size 2 min_size 1 crush_ruleset 0 object_hash rjenkins pg_num 60 pgp_num 60 last_change 51 flags hashpspool stripe_width 0
+ *
+ * max_osd 25
+ * osd.0 up   in  weight 1 up_from 2 up_thru 51 down_at 0 last_clean_interval [0,0) 10.21.48.63:1300/3527953 10.21.48.63:1301/3527953 10.21.48.63:1302/3527953 10.21.48.63:1303/3527953 exists,up 0e161bab-6c22-4868-b859-4780cbfb1618
+ * osd.1 up   in  weight 1 up_from 3 up_thru 51 down_at 0 last_clean_interval [0,0) 10.21.48.63:1304/3528234 10.21.48.63:1305/3528234 10.21.48.63:1306/3528234 10.21.48.63:1307/3528234 exists,up d1bd995e-5140-487d-80b7-e8aaabf3d5f5
+ * osd.2 up   in  weight 1 up_from 3 up_thru 51 down_at 0 last_clean_interval [0,0) 10.21.48.63:1308/3528641 10.21.48.63:1309/3528641 10.21.48.63:1310/3528641 10.21.48.63:1311/3528641 exists,up 06b92443-b498-4c1e-b38b-f8f2a0affe12
+ * osd.3 up   in  weight 1 up_from 4 up_thru 51 down_at 0 last_clean_interval [0,0) 10.21.48.63:1312/3529198 10.21.48.63:1313/3529198 10.21.48.63:1314/3529198 10.21.48.63:1315/3529198 exists,up 186d5d59-5856-41cf-8e3e-5e7fd54d817e
+ * ......
+ * osd.24 up   in  weight 1 up_from 6 up_thru 51 down_at 0 last_clean_interval [0,0) 10.21.48.68:1316/2190360 10.21.48.68:1317/2190360 10.21.48.68:1318/2190360 10.21.48.68:1319/2190360 exists,up 29044166-2f45-4fae-998f-e5bd4a4f171b
+ *
+ * #         --simon
+ */
 struct osd_xinfo_t {
   utime_t down_stamp;      ///< timestamp when we were last marked down
   float laggy_probability; ///< encoded as __u32: 0 = definitely not laggy, 0xffffffff definitely laggy

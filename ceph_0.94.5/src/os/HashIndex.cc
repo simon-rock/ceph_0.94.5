@@ -364,6 +364,7 @@ int HashIndex::_pre_hash_collection(uint32_t pg_num, uint64_t expected_num_objs)
 
 int HashIndex::pre_split_folder(uint32_t pg_num, uint64_t expected_num_objs)
 {
+  // e.g. pg_num=10300, expected_num_objs=2457600, merge_threshold=-300, split_multiplier=2, collection = 5.14cd  -- simon
   // If folder merging is enabled (by setting the threshold positive),
   // no need to split
   if (merge_threshold > 0)
@@ -384,55 +385,63 @@ int HashIndex::pre_split_folder(uint32_t pg_num, uint64_t expected_num_objs)
   spg_t spgid;
   if (!c.is_pg_prefix(spgid))
     return -EINVAL;
-  const ps_t ps = spgid.pgid.ps();
+  const ps_t ps = spgid.pgid.ps();    // ps = 0x14cd
 
   // the most significant bits of pg_num
-  const int pg_num_bits = calc_num_bits(pg_num - 1);
+  const int pg_num_bits = calc_num_bits(pg_num - 1);  // pg_num_bits = 14, (10300-1)d=(10100000111011)b --simon
   ps_t tmp_id = ps;
   // calculate the number of levels we only create one sub folder
-  int num = pg_num_bits / 4;
+  int num = pg_num_bits / 4;                          // num = 3 --simon
   // pg num's hex value is like 1xxx,xxxx,xxxx but not 1111,1111,1111,
   // so that splitting starts at level 3
+  // if pg_num is 12 bits, and it is not 1111,1111,1111, --num so num is 2, and splitting starts at level 3
+  // if pg_num is 1111,1111,1111, no --num here so num is 3, and splitting starts at level 4  -- simon
   if (pg_num_bits % 4 == 0 && pg_num < ((uint32_t)1 << pg_num_bits)) {
     --num;
   }
 
   int ret;
   // Start with creation that only has one subfolder
+  // the bigger pg_num is, the more bits pg_num has, the more folders that have only on subfolder 
   vector<string> paths;
-  int dump_num = num;
+  int dump_num = num;                         // dump_num = 3 --simon
   while (num-- > 0) {
-    ps_t v = tmp_id & 0x0000000f;
+    ps_t v = tmp_id & 0x0000000f;             // v = 0xD, 0xC, 0x4 --simon
     paths.push_back(to_hex(v));
-    ret = create_path(paths);
+    ret = create_path(paths);                 // create 5.14cd_head/DIR_D, 5.14cd_head/DIR_D/DIR_C, 5.14cd_head/DIR_D/DIR_C/DIR_4 --simon
     if (ret < 0 && ret != -EEXIST)
       return ret;
     tmp_id = tmp_id >> 4;
   }
 
+  //tmp_id = 0x14cd >> 4 >> 4 >> 4 = 0x1  --simon
   // Starting from here, we can split by creating multiple subfolders
-  const int left_bits = pg_num_bits - dump_num * 4;
+  const int left_bits = pg_num_bits - dump_num * 4;              //left_bits = 14-3*4 = 2; how many bits are left when devided by 4 --simon
   // this variable denotes how many bits (for this level) that can be
   // used for sub folder splitting
-  int split_bits = 4 - left_bits;
+  int split_bits = 4 - left_bits;                                //split_bits = 4-2 = 2  --simon
   // the below logic is inspired by rados.h#ceph_stable_mod,
   // it basically determines how many sub-folders should we
   // create for splitting
-  if (((1 << (pg_num_bits - 1)) | ps) >= pg_num) {
-    ++split_bits;
+  if (((1 << (pg_num_bits - 1)) | ps) >= pg_num) {               // (10000000000000)b | 0x14cd = 0x2000 | 0x14cd = 0x34cd = 13517 > 10300  --simon
+    ++split_bits;                                                // split_bits = 3 --simon
   }
-  const uint32_t subs = (1 << split_bits);
+  const uint32_t subs = (1 << split_bits);                       // subs = (1000)b = 8 --simon
   // Calculate how many levels we create starting from here
   int level  = 0;
-  leavies /= subs;
+  leavies /= subs;                                               // leavies = 256/8 = 32 --simon
   while (leavies > 1) {
     ++level;
     leavies = leavies >> 4;
   }
+  // level = 2 --simon
   for (uint32_t i = 0; i < subs; ++i) {
+    // (4 - split_bits) % 4 = 1;  v = 1, 3, 5, 7, 9, B, D, F; It's guaranteed that all objects in this collection have HASH like
+    //XXXX{i}4CD where i = 1 or 3 or 5 or ... or F, so that they can be placed in these folders; I don't known how that's guaranteed, but
+    //I see it's true;
     int v = tmp_id | (i << ((4 - split_bits) % 4));
     paths.push_back(to_hex(v));
-    ret = create_path(paths);
+    ret = create_path(paths);                                   // create 5.14cd_head/DIR_D/DIR_C/DIR_4/DIR_1, 5.14cd_head/DIR_D/DIR_C/DIR_4/DIR_3 ... 5.14cd_head/DIR_D/DIR_C/DIR_4/DIR_F
     if (ret < 0 && ret != -EEXIST)
       return ret;
     ret = recursive_create_path(paths, level);
@@ -549,6 +558,9 @@ int HashIndex::end_split_or_merge(const vector<string> &path) {
 
 int HashIndex::get_info(const vector<string> &path, subdir_info_s *info) {
   bufferlist buf;
+
+  // get xattr 'user.cephos.phash.contents' of the -- simon
+  // subdir (eg. /data/cache/osd70/current/5.17c_head/DIR_C/DIR_7/DIR_1/DIR_3)
   int r = get_attr_path(path, SUBDIR_ATTR, buf);
   if (r < 0)
     return r;
@@ -624,16 +636,24 @@ int HashIndex::initiate_split(const vector<string> &path, subdir_info_s info) {
 }
 
 int HashIndex::complete_split(const vector<string> &path, subdir_info_s info) {
+  
+  dout(0) << __func__ << " enter" << dendl;
   int level = info.hash_level;
   map<string, ghobject_t> objects;
   vector<string> dst = path;
   int r;
   dst.push_back("");
+
+  dout(10) << __func__ << " before list objects" << dendl;
   r = list_objects(path, 0, 0, &objects);
+  dout(10) << __func__ << " after list objects" << dendl;
   if (r < 0)
     return r;
   set<string> subdirs;
+  
+  dout(10) << __func__ << " before list subdirs" << dendl;
   r = list_subdirs(path, &subdirs);
+  dout(10) << __func__ << " after list subdirs" << dendl;
   if (r < 0)
     return r;
   map<string, map<string, ghobject_t> > mapped;
@@ -646,6 +666,9 @@ int HashIndex::complete_split(const vector<string> &path, subdir_info_s info) {
     get_path_components(i->second, &new_path);
     mapped[new_path[level]][i->first] = i->second;
   }
+
+  dout(10) << __func__ << " before main loop" << dendl;
+  int num=0;
   for (map<string, map<string, ghobject_t> >::iterator i = mapped.begin();
        i != mapped.end();
        ) {
@@ -710,7 +733,9 @@ int HashIndex::complete_split(const vector<string> &path, subdir_info_s info) {
       return r;
 
     ++i;
+    num++;
   }
+  dout(10) << __func__ << " after main loop, num=" << num << dendl;
   r = remove_objects(path, moved, &objects);
   if (r < 0)
     return r;
@@ -721,6 +746,8 @@ int HashIndex::complete_split(const vector<string> &path, subdir_info_s info) {
   r = fsync_dir(path);
   if (r < 0)
     return r;
+  
+  dout(0) << __func__ << " exit, num=" << num << dendl;
   return end_split_or_merge(path);
 }
 

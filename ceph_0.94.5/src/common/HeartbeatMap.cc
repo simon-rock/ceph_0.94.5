@@ -139,6 +139,8 @@ bool HeartbeatMap::is_healthy()
 void HeartbeatMap::check_touch_file()
 {
   if (is_healthy()) {
+    //by default, heartbeat_file is empty for mon and osd,
+    //so, nothing is done here;            -- simon
     string path = m_cct->_conf->heartbeat_file;
     if (path.length()) {
       int fd = ::open(path.c_str(), O_WRONLY|O_CREAT, 0644);

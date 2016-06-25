@@ -2091,7 +2091,7 @@ ceph_tid_t Objecter::_op_submit(Op *op, RWLock::Context& lc)
   // pick target
   assert(op->session == NULL);
   OSDSession *s = NULL;
-
+  // run CRUSH algorithm --simon*****
   bool const check_for_latest_map = _calc_target(&op->target, &op->last_force_resend) == RECALC_OP_TARGET_POOL_DNE;
 
   // Try to get a session, including a retry if we need to take write lock

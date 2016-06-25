@@ -98,6 +98,7 @@ struct config_option config_optionsp[] = {
 
 const int NUM_CONFIG_OPTIONS = sizeof(config_optionsp) / sizeof(config_option);
 
+// find a file in filename_list that can be open successfully.     --simon
 bool ceph_resolve_file_search(const std::string& filename_list,
 			      std::string& result)
 {
