@@ -643,6 +643,8 @@ export RPM_OPT_FLAGS=`echo $RPM_OPT_FLAGS | sed -e 's/i386/i486/'`
 		--with-nss \
 		--without-cryptopp \
 		--with-debug \
+                --without-tcmalloc \
+                --with-jemalloc \
 %if 0%{with cephfs_java}
 		--enable-cephfs-java \
 %endif
