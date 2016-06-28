@@ -228,12 +228,13 @@ void Log::submit_entry(Entry *e)
 }
 
 
-Entry *Log::create_entry(int level, int subsys)
+  Entry *Log::create_entry(int level, int subsys, short line, const char*file)
 {
   if (true) {
     return new Entry(ceph_clock_now(NULL),
-		   pthread_self(),
-		   level, subsys);
+		     pthread_self(),
+		     level, subsys,
+		     line, file); // for log, by simon
   } else {
     // kludge for perf testing
     Entry *e = m_recent.dequeue();
@@ -321,7 +322,7 @@ void Log::_flush(EntryQueue *t, EntryQueue *requeue, bool crash)
       buflen += e->m_stamp.sprintf(buf + buflen, buf_size-buflen);
       buflen += snprintf(buf + buflen, buf_size-buflen, " %lx %2d ",
 			(unsigned long)e->m_thread, e->m_prio);
-      buffer += snprintf(buf + buflen, sizeof(buf)-buflen, " %s:%d ", e->m_file, e->m_line); // for log, by simon
+      buflen += snprintf(buf + buflen, sizeof(buf)-buflen, " %s:%d ", e->m_file, e->m_line); // for log, by simon
       buflen += e->snprintf(buf + buflen, buf_size - buflen - 1);
       if (buflen > buf_size - 1) { //paranoid check, buf was declared
 				   //to hold everything

@@ -18,7 +18,7 @@ struct Entry {
   pthread_t m_thread;
   short m_prio, m_subsys;
   short m_line;           // for log, by simon
-  char* m_file[40];         // for log, by simon
+  char m_file[40];         // for log, by simon
   Entry *m_next;
 
   PrebufferedStreambuf m_streambuf;
@@ -35,7 +35,7 @@ struct Entry {
       m_exp_len(NULL)
   {}
   Entry(utime_t s, pthread_t t, short pr, short sub,
-	short line, char* file,        // for log, by simon
+	short line, const char* file,        // for log, by simon
   const char *msg = NULL)
       : m_stamp(s), m_thread(t), m_prio(pr), m_subsys(sub),
 	m_line(line),                 // for log, by simon
@@ -50,13 +50,14 @@ struct Entry {
       }
       // for log, by simon
       if(NULL == file)
-	return
+	return;
       memset(m_file, 0, sizeof(m_file));            
       memcpy(m_file, file, sizeof(m_file)-1 );
     }
-  Entry(utime_t s, pthread_t t, short pr, short sub, char* buf, size_t buf_len, size_t* exp_len,
+  Entry(utime_t s, pthread_t t, short pr, short sub, short line, const char* file, char* buf, size_t buf_len, size_t* exp_len,
 	const char *msg = NULL)
     : m_stamp(s), m_thread(t), m_prio(pr), m_subsys(sub),
+      m_line(line),                   // for log, by simon
       m_next(NULL),
       m_streambuf(buf, buf_len),
       m_buf_len(buf_len),
@@ -66,6 +67,11 @@ struct Entry {
       ostream os(&m_streambuf);
       os << msg;
     }
+    // for log, by simon
+    if(NULL == file)
+      return;
+    memset(m_file, 0, sizeof(m_file));            
+    memcpy(m_file, file, sizeof(m_file)-1 );
   }
 
   // function improves estimate for expected size of message
