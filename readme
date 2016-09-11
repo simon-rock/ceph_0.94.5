@@ -1,0 +1,7 @@
+1. forbid to generate debuginfo package
+	echo '%debug_package %{nil}' >> ~/.rpmmacros
+
+2. incremental compilation
+	use ceph_1022_inc_compile.spec 
+
+
