@@ -920,15 +920,15 @@ void PGLog::read_log(ObjectStore *store, coll_t pg_coll,
   if (info.last_complete < info.last_update) {
     dout(10) << "read_log checking for missing items over interval (" << info.last_complete
 	     << "," << info.last_update << "]" << dendl;
-
+    // check all the pg log to find missing list,firstly find them with pglog info and pg log list
     set<hobject_t> did;
-    for (list<pg_log_entry_t>::reverse_iterator i = log.log.rbegin();
+    for (list<pg_log_entry_t>::reverse_iterator i = log.log.rbegin(); // log.log means the all of the pg log (maybe only have after the commite)
 	 i != log.log.rend();
 	 ++i) {
-      if (i->version <= info.last_complete) break;
-      if (i->soid > info.last_backfill) continue;
-      if (did.count(i->soid)) continue;
-      did.insert(i->soid);
+      if (i->version <= info.last_complete) break;                    // if the version of pg log more less than last complete. error!!!, because the version of log will be more then last.
+      if (i->soid > info.last_backfill) continue;                     // you can find some mark in pg_info_t, I guess there are some objs in one pglog,so we must find which obj is laster complete ???
+      if (did.count(i->soid)) continue;                               // have count one
+      did.insert(i->soid);                                            // add to list to did later
       
       if (i->is_delete()) continue;
       
@@ -940,16 +940,16 @@ void PGLog::read_log(ObjectStore *store, coll_t pg_coll,
 	bv);
       if (r >= 0) {
 	object_info_t oi(bv);
-	if (oi.version < i->version) {
+	if (oi.version < i->version) {                                // if the current version of the obj is less than that version og obj in the sp. pg log.  maybe the obj have been update but has not change the pg info. make the check
 	  dout(15) << "read_log  missing " << *i << " (have " << oi.version << ")" << dendl;
 	  missing.add(i->soid, i->version, oi.version);
 	}
-      } else {
+      } else {                                                        // means the obj hasn't been there. so need add it
 	dout(15) << "read_log  missing " << *i << dendl;
 	missing.add(i->soid, i->version, eversion_t());
       }
     }
-    for (map<eversion_t, hobject_t>::reverse_iterator i =
+    for (map<eversion_t, hobject_t>::reverse_iterator i =             // the pg log on other osd??
 	   divergent_priors.rbegin();
 	 i != divergent_priors.rend();
 	 ++i) {
