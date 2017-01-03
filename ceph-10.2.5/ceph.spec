@@ -327,7 +327,7 @@ Requires:      python-Flask
 %description radosgw
 RADOS is a distributed object store used by the Ceph distributed
 storage system.  This package provides a REST gateway to the
-object store that aims to implement a superset of Amazon's S3
+object store that aims to implement a superset of Amazon''s S3
 service as well as the OpenStack Object Storage ("Swift") API.
 
 %if %{with ocf}
@@ -656,6 +656,8 @@ export RPM_OPT_FLAGS=`echo $RPM_OPT_FLAGS | sed -e 's/i386/i486/'`
 		--with-nss \
 		--without-cryptopp \
 		--with-debug \
+		--without-tcmalloc \
+		--with-jemalloc \
 %if 0%{with cephfs_java}
 		--enable-cephfs-java \
 %endif
