@@ -1834,6 +1834,7 @@ int RGWREST::preprocess(struct req_state *s, RGWClientIO* cio)
   if (!http_content_length != !content_length) {
     /* Easy case: one or the other is missing */
     s->length = (content_length ? content_length : http_content_length);
+    ldout(s->cct, 20) << "only CONTENT_LENGTH or HTTP_CONTENT_LENGTH : " << s->length << dendl; // add by simon
   } else if (s->cct->_conf->rgw_content_length_compat &&
 	     content_length && http_content_length) {
     /* Hard case: Both are set, we have to disambiguate */
@@ -1858,10 +1859,12 @@ int RGWREST::preprocess(struct req_state *s, RGWClientIO* cio)
       }
     }
     s->length = content_length;
+    ldout(s->cct, 20) << "both have CONTENT_LENGTH and HTTP_CONTENT_LENGTH, rgw_content_length_compat(true) : " << s->length << dendl; // add by simon
     // End of: else if (s->cct->_conf->rgw_content_length_compat &&
     //   content_length &&
     // http_content_length)
   } else {
+    ldout(s->cct, 20) << "neither CONTENT_LENGTH nor neither HTTP_CONTENT_LENGTH or rgw_content_length_compat(false) : " << s->length << dendl; // add by simon
     /* no content length was defined */
     s->length = NULL;
   }
