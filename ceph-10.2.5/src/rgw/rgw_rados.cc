@@ -11559,8 +11559,9 @@ int RGWRados::cls_obj_usage_log_trim(string& oid, string& user, uint64_t start_e
   return r;
 }
 
-int RGWRados::remove_objs_from_index(rgw_bucket& bucket, list<rgw_obj_key>& oid_list)
+int RGWRados::remove_objs_from_index(rgw_bucket& bucket, list<rgw_obj_key>& oid_list, unsigned int skip, int cnt)
 {
+  dout(0) << "RGWRados::remove_objs_from_index bucket=" << bucket << " objs=" << oid_list.size() << " " << skip << "/" << cnt<< dendl;
   librados::IoCtx index_ctx;
   string dir_oid;
 
@@ -11573,8 +11574,17 @@ int RGWRados::remove_objs_from_index(rgw_bucket& bucket, list<rgw_obj_key>& oid_
   bufferlist updates;
 
   list<rgw_obj_key>::iterator iter;
-
-  for (iter = oid_list.begin(); iter != oid_list.end(); ++iter) {
+  list<rgw_obj_key>::iterator begin = oid_list.begin();
+  if (oid_list.size() > skip ){
+      advance(begin, skip);
+  }
+  list<rgw_obj_key>::iterator end = oid_list.begin();
+  if (cnt > 0 && oid_list.size() > skip + cnt) {
+      advance(end, skip + cnt);
+  }else
+      end = oid_list.end();
+  
+  for (iter = begin; iter != end; ++iter) {
     rgw_obj_key& key = *iter;
     dout(2) << "RGWRados::remove_objs_from_index bucket=" << bucket << " obj=" << key.name << ":" << key.instance << dendl;
     rgw_bucket_dir_entry entry;

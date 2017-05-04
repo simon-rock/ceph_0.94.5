@@ -2905,7 +2905,9 @@ public:
                          map<RGWObjCategory, RGWStorageStats> *existing_stats,
                          map<RGWObjCategory, RGWStorageStats> *calculated_stats);
   int bucket_rebuild_index(rgw_bucket& bucket);
-  int remove_objs_from_index(rgw_bucket& bucket, list<rgw_obj_key>& oid_list);
+ // skip = 0, cnt = -1 will remove all of the oid_list
+  // but if the size of oid_list is too large , you will the error (-90)
+  int remove_objs_from_index(rgw_bucket& bucket, list<rgw_obj_key>& oid_list, unsigned int skip = 0, int cnt = -1);
   int move_rados_obj(librados::IoCtx& src_ioctx,
 		     const string& src_oid, const string& src_locator,
 	             librados::IoCtx& dst_ioctx,

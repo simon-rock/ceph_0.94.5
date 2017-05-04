@@ -635,7 +635,6 @@ int RGWBucket::init(RGWRados *storage, RGWBucketAdminOpState& op_state)
       ldout(store->ctx(), 0) << "could not get bucket info for bucket=" << bucket_name << dendl;
       return r;
     }
-
     op_state.set_bucket(bucket_info.bucket);
   }
 
@@ -898,7 +897,7 @@ int RGWBucket::check_bad_index_multipart(RGWBucketAdminOpState& op_state,
     }
 
   } while (is_truncated);
-
+  ldout(store->ctx(), 0) << "all_objs: "<< all_objs.size() << " / meta_objs:" << meta_objs.size() << dendl;
   map<rgw_obj_key, string>::iterator aiter;
   for (aiter = all_objs.begin(); aiter != all_objs.end(); ++aiter) {
     string& name = aiter->second;
@@ -907,18 +906,26 @@ int RGWBucket::check_bad_index_multipart(RGWBucketAdminOpState& op_state,
       objs_to_unlink.push_back(aiter->first);
     }
   }
-
+  ldout(store->ctx(), 0) << "need delete files num : "<< objs_to_unlink.size() << dendl;
   if (objs_to_unlink.empty())
     return 0;
 
   if (fix_index) {
-    int r = store->remove_objs_from_index(bucket, objs_to_unlink);
-    if (r < 0) {
-      set_err_msg(err_msg, "ERROR: remove_obj_from_index() returned error: " +
-              cpp_strerror(-r));
-
-      return r;
-    }
+    // add by simon, for check_index, cmd is bucket check
+    // in the case, the num, objs need to been fixed, is too large, Objecter returned from return -90 (msg is too long)
+    ldout(store->ctx(), 0) << "need fix : "<< objs_to_unlink.size() << dendl;
+    unsigned int begin = 0;
+    int cnt = 1000;
+    do {
+      ldout(store->ctx(), 0) << "remove objs from index :  "<< begin << " / " << cnt << " / "<< objs_to_unlink.size() << dendl;
+      int r = store->remove_objs_from_index(bucket, objs_to_unlink, begin, cnt);
+      if (r < 0) {
+	set_err_msg(err_msg, "ERROR: remove_obj_from_index() returned error: " +
+		    cpp_strerror(-r));
+	return r;
+      }
+      begin += cnt;
+    }while(cnt > 0 && begin < objs_to_unlink.size());
   }
 
   return 0;
@@ -1148,14 +1155,8 @@ int RGWBucketAdminOp::check_index(RGWRados *store, RGWBucketAdminOpState& op_sta
 
   Formatter *formatter = flusher.get_formatter();
   flusher.start(0);
-
-  ret = bucket.check_bad_index_multipart(op_state, objs_to_unlink);
-  if (ret < 0)
-    return ret;
-
-  dump_mulipart_index_results(objs_to_unlink, formatter);
-  flusher.flush();
-
+ 
+  ldout(store->ctx(), 0) << "start bucket check_object_index" << dendl;
   ret = bucket.check_object_index(op_state, result);
   if (ret < 0)
     return ret;
@@ -1163,6 +1164,7 @@ int RGWBucketAdminOp::check_index(RGWRados *store, RGWBucketAdminOpState& op_sta
   dump_bucket_index(result,  formatter);
   flusher.flush();
 
+  ldout(store->ctx(), 0) << "start bucket check_index" << dendl;
   ret = bucket.check_index(op_state, existing_stats, calculated_stats);
   if (ret < 0)
     return ret;
@@ -1170,6 +1172,16 @@ int RGWBucketAdminOp::check_index(RGWRados *store, RGWBucketAdminOpState& op_sta
   dump_index_check(existing_stats, calculated_stats, formatter);
   flusher.flush();
 
+  // because, check_bad_index_multipart make all obj as multipart objs
+  ldout(store->ctx(), 0) << "start bucket check_bad_index_multipart" << dendl;
+  string ret_msg;
+  ret = bucket.check_bad_index_multipart(op_state, objs_to_unlink, &ret_msg);
+  ldout(store->ctx(), 0) << "end bucket check_bad_index_multipart ret: " << ret << "(" << ret_msg << ") unlink files:" << objs_to_unlink.size()<< dendl;
+  if (ret < 0)
+    return ret;
+
+  dump_mulipart_index_results(objs_to_unlink, formatter);
+  flusher.flush();
   return 0;
 }
 
