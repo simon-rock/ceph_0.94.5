@@ -11605,8 +11605,8 @@ int RGWRados::remove_objs_from_index(rgw_bucket& bucket, list<rgw_obj_key>& oid_
           r = index_ctx.exec(dir_oid, "rgw", "dir_suggest_changes", updates, out);
           if(r < 0)
               return r;
-          begin += cnt;
-      }while(cnt > 0 && begin < objs_to_unlink.size());
+          skip += cnt;
+      }while(cnt > 0 && skip < oid_list.size());
   }
   return 0;
 }
