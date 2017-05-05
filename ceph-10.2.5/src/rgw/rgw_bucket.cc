@@ -906,26 +906,18 @@ int RGWBucket::check_bad_index_multipart(RGWBucketAdminOpState& op_state,
       objs_to_unlink.push_back(aiter->first);
     }
   }
-  ldout(store->ctx(), 0) << "need delete files num : "<< objs_to_unlink.size() << dendl;
+  ldout(store->ctx(), 0) << "unlink files : "<< objs_to_unlink.size() << dendl;
   if (objs_to_unlink.empty())
     return 0;
 
   if (fix_index) {
-    // add by simon, for check_index, cmd is bucket check
-    // in the case, the num, objs need to been fixed, is too large, Objecter returned from return -90 (msg is too long)
-    ldout(store->ctx(), 0) << "need fix : "<< objs_to_unlink.size() << dendl;
-    unsigned int begin = 0;
-    int cnt = 1000;
-    do {
-      ldout(store->ctx(), 0) << "remove objs from index :  "<< begin << " / " << cnt << " / "<< objs_to_unlink.size() << dendl;
-      int r = store->remove_objs_from_index(bucket, objs_to_unlink, begin, cnt);
-      if (r < 0) {
-	set_err_msg(err_msg, "ERROR: remove_obj_from_index() returned error: " +
-		    cpp_strerror(-r));
-	return r;
-      }
-      begin += cnt;
-    }while(cnt > 0 && begin < objs_to_unlink.size());
+    ldout(store->ctx(), 0) << "fix files: "<< objs_to_unlink.size() << dendl;
+    int r = store->remove_objs_from_index(bucket, objs_to_unlink);
+    if (r < 0) {
+      set_err_msg(err_msg, "ERROR: remove_obj_from_index() returned error: " +
+		  cpp_strerror(-r));
+      return r;
+    }
   }
 
   return 0;

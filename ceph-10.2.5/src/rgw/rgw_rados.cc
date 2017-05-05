@@ -11559,9 +11559,9 @@ int RGWRados::cls_obj_usage_log_trim(string& oid, string& user, uint64_t start_e
   return r;
 }
 
-int RGWRados::remove_objs_from_index(rgw_bucket& bucket, list<rgw_obj_key>& oid_list, unsigned int skip, int cnt)
+int RGWRados::remove_objs_from_index(rgw_bucket& bucket, list<rgw_obj_key>& oid_list)
 {
-  dout(0) << "RGWRados::remove_objs_from_index bucket=" << bucket << " objs=" << oid_list.size() << " " << skip << "/" << cnt<< dendl;
+  
   librados::IoCtx index_ctx;
   string dir_oid;
 
@@ -11571,34 +11571,44 @@ int RGWRados::remove_objs_from_index(rgw_bucket& bucket, list<rgw_obj_key>& oid_
   if (r < 0)
     return r;
 
-  bufferlist updates;
-
-  list<rgw_obj_key>::iterator iter;
-  list<rgw_obj_key>::iterator begin = oid_list.begin();
-  if (oid_list.size() > skip ){
-      advance(begin, skip);
+  {
+      // add by simon, for check_index, cmd is bucket check
+      // in the case, the num, objs need to been fixed, is too large, Objecter returned from return -90 (msg is too long)
+      unsigned int skip = 0;
+      int cnt = 1000;
+      do {
+          dout(0) << "RGWRados::remove_objs_from_index bucket=" << bucket << " objs=" << oid_list.size() << " " << skip << "/" << cnt<< dendl;        
+          bufferlist updates;
+          list<rgw_obj_key>::iterator iter;
+          list<rgw_obj_key>::iterator begin = oid_list.begin();
+          if (oid_list.size() > skip ){
+              advance(begin, skip);
+          }
+          list<rgw_obj_key>::iterator end = oid_list.begin();
+          if (cnt > 0 && oid_list.size() > skip + cnt) {
+              advance(end, skip + cnt);
+          }else
+              end = oid_list.end();
+          
+          for (iter = begin; iter != end; ++iter) {
+              rgw_obj_key& key = *iter;
+              dout(2) << "RGWRados::remove_objs_from_index bucket=" << bucket << " obj=" << key.name << ":" << key.instance << dendl;
+              rgw_bucket_dir_entry entry;
+              entry.ver.epoch = (uint64_t)-1; // ULLONG_MAX, needed to that objclass doesn't skip out request
+              key.transform(&entry.key);
+              updates.append(CEPH_RGW_REMOVE | suggest_flag);
+              ::encode(entry, updates);
+          }
+          
+          bufferlist out;
+          
+          r = index_ctx.exec(dir_oid, "rgw", "dir_suggest_changes", updates, out);
+          if(r < 0)
+              return r;
+          begin += cnt;
+      }while(cnt > 0 && begin < objs_to_unlink.size());
   }
-  list<rgw_obj_key>::iterator end = oid_list.begin();
-  if (cnt > 0 && oid_list.size() > skip + cnt) {
-      advance(end, skip + cnt);
-  }else
-      end = oid_list.end();
-  
-  for (iter = begin; iter != end; ++iter) {
-    rgw_obj_key& key = *iter;
-    dout(2) << "RGWRados::remove_objs_from_index bucket=" << bucket << " obj=" << key.name << ":" << key.instance << dendl;
-    rgw_bucket_dir_entry entry;
-    entry.ver.epoch = (uint64_t)-1; // ULLONG_MAX, needed to that objclass doesn't skip out request
-    key.transform(&entry.key);
-    updates.append(CEPH_RGW_REMOVE | suggest_flag);
-    ::encode(entry, updates);
-  }
-
-  bufferlist out;
-
-  r = index_ctx.exec(dir_oid, "rgw", "dir_suggest_changes", updates, out);
-
-  return r;
+  return 0;
 }
 
 int RGWRados::check_disk_state(librados::IoCtx io_ctx,
