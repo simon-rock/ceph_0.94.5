@@ -41,7 +41,7 @@ int process_request(RGWRados* store, RGWREST* rest, RGWRequest* req,
 
   req->log_init();
 
-  dout(1) << "====== starting new request req=" << hex << req << dec
+  dout(2) << "====== starting new request req=" << hex << req << dec
 	  << " =====" << dendl;
   perfcounter->inc(l_rgw_req);
 
@@ -65,6 +65,11 @@ int process_request(RGWRados* store, RGWREST* rest, RGWRequest* req,
   int init_error = 0;
   bool should_log = false;
   RGWRESTMgr *mgr;
+  uint64_t in_nsec = req->req_in.to_nsec();
+  utime_t now = ceph_clock_now(g_ceph_context);
+  uint64_t now_nsec = now.to_nsec();
+  uint64_t dequeue_cost= (now_nsec-in_nsec)/1000;
+  
   RGWHandler_REST *handler = rest->get_handler(store, s, client_io, &mgr,
 					      &init_error);
   if (init_error != 0) {
@@ -179,8 +184,10 @@ done:
   if (r < 0) {
     dout(0) << "ERROR: client_io->complete_request() returned " << r << dendl;
   }
+  string op_type;
   if (should_log) {
     rgw_log_op(store, s, (op ? op->name() : "unknown"), olog);
+    op_type = (op ? op->name() : "unknown");
   }
 
   int http_ret = s->err.http_ret;
@@ -196,9 +203,17 @@ done:
     handler->put_op(op);
   rest->put_handler(handler);
 
+  utime_t finish = ceph_clock_now(g_ceph_context);
+  uint64_t finish_nsec = finish.to_nsec();
+  uint64_t process_cost= (finish_nsec-in_nsec)/1000;
   dout(1) << "====== req done req=" << hex << req << dec
 	  << " op status=" << op_ret
 	  << " http_status=" << http_ret
+          << " in_time="<< req->req_in
+	  << " dequeue_cost="<< dequeue_cost << "(usec)"
+	  << " process_cost="<< process_cost << "(usec)"
+          << " " << op_type
+	  << ":" << s->object.name
 	  << " ======"
 	  << dendl;
 

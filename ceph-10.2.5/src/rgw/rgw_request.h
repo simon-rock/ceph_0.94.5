@@ -20,7 +20,8 @@ struct RGWRequest
   string req_str;
   RGWOp *op;
   utime_t ts;
-
+  utime_t req_in;
+  
   explicit RGWRequest(uint64_t id) : id(id), s(NULL), op(NULL) {}
 
   virtual ~RGWRequest() {}

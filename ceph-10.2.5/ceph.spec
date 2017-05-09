@@ -57,7 +57,7 @@
 #################################################################################
 Name:		ceph
 Version:	10.2.5
-Release:	0%{?dist}
+Release:	1%{?dist}
 Epoch:		1
 Summary:	User space components of the Ceph file system
 License:	LGPL-2.1 and CC-BY-SA-1.0 and GPL-2.0 and BSL-1.0 and GPL-2.0-with-autoconf-exception and BSD-3-Clause and MIT
@@ -685,7 +685,7 @@ export RPM_OPT_FLAGS=`echo $RPM_OPT_FLAGS | sed -e 's/i386/i486/'`
 %define _smp_mflags -j8
 %endif
 %endif
-
+%define _smp_mflags -j4
 make %{?_smp_mflags}
 
 

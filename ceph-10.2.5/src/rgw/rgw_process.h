@@ -52,9 +52,10 @@ protected:
 					  tp), process(p) {}
 
     bool _enqueue(RGWRequest* req) {
+      req->req_in = ceph_clock_now(g_ceph_context);
       process->m_req_queue.push_back(req);
       perfcounter->inc(l_rgw_qlen);
-      dout(20) << "enqueued request req=" << hex << req << dec << dendl;
+      dout(20) << "enqueued request req=" << hex << req << dec << " in_time="<< req->req_in << dendl;
       _dump_queue();
       return true;
     }
