@@ -2486,6 +2486,7 @@ int RGWPutObjProcessor_Atomic::do_complete(string& etag, real_time *mtime, real_
                                            const char *if_match,
                                            const char *if_nomatch) {
   int r = complete_writing_data();
+  ldout(store->ctx(), 3) << "complete_writing_data finish " << r << dendl;
   if (r < 0)
     return r;
 
@@ -2511,6 +2512,7 @@ int RGWPutObjProcessor_Atomic::do_complete(string& etag, real_time *mtime, real_
   obj_op.meta.delete_at = delete_at;
 
   r = obj_op.write_meta(obj_len, attrs);
+  ldout(store->ctx(), 3) << "obj_op.write_meta finish " << r << dendl;
   if (r < 0) {
     return r;
   }
@@ -6059,7 +6061,7 @@ int RGWRados::Object::Write::write_meta(uint64_t size,
     return r;
 
   rgw_obj& obj = target->get_obj();
-
+  ldout(store->ctx(), 0) << "write_meta obj.get_object()= " << obj.get_object() << dendl;
   if (obj.get_object().empty()) {
     ldout(store->ctx(), 0) << "ERROR: " << __func__ << "(): cannot write object with empty name" << dendl;
     return -EIO;
@@ -6160,7 +6162,7 @@ int RGWRados::Object::Write::write_meta(uint64_t size,
   bool versioned_op = (target->versioning_enabled() || is_olh || versioned_target);
 
   RGWBucketInfo& bucket_info = target->get_bucket_info();
-
+  ldout(store->ctx(), 3) << "write_meta target->get_bucket_info : " << bucket_info.bucket.name << dendl;
   RGWRados::Bucket bop(store, bucket_info);
   RGWRados::Bucket::UpdateIndex index_op(&bop, obj, state);
 
@@ -6170,10 +6172,12 @@ int RGWRados::Object::Write::write_meta(uint64_t size,
 
 
   r = index_op.prepare(CLS_RGW_OP_ADD);
+  ldout(store->ctx(), 3) << "write_meta index_op.prepare : ret = " << r << dendl;
   if (r < 0)
     return r;
 
   r = ref.ioctx.operate(ref.oid, &op);
+  ldout(store->ctx(), 3) << "write_meta ref.ioctx.operate : ret = " << r << dendl;
   if (r < 0) { /* we can expect to get -ECANCELED if object was replaced under,
                 or -ENOENT if was removed, or -EEXIST if it did not exist
                 before and now it does */
@@ -6184,6 +6188,7 @@ int RGWRados::Object::Write::write_meta(uint64_t size,
   poolid = ref.ioctx.get_id();
 
   r = target->complete_atomic_modification();
+  ldout(store->ctx(), 3) << "write_meta complete_atomic_modification : ret = " << r << dendl;
   if (r < 0) {
     ldout(store->ctx(), 0) << "ERROR: complete_atomic_modification returned r=" << r << dendl;
   }
@@ -6191,6 +6196,7 @@ int RGWRados::Object::Write::write_meta(uint64_t size,
   r = index_op.complete(poolid, epoch, size,
                         meta.set_mtime, etag, content_type, &acl_bl,
                         meta.category, meta.remove_objs);
+  ldout(store->ctx(), 3) << "write_meta index_op.complete : ret = " << r << dendl;
   if (r < 0)
     goto done_cancel;
 
@@ -6215,6 +6221,7 @@ int RGWRados::Object::Write::write_meta(uint64_t size,
 
     r = store->objexp_hint_add(meta.delete_at,
             bucket.tenant, bucket.name, bucket.bucket_id, obj_key);
+    ldout(store->ctx(), 3) << "write_meta real_clock meta.delete_at : ret = " << r << dendl;
     if (r < 0) {
       ldout(store->ctx(), 0) << "ERROR: objexp_hint_add() returned r=" << r << ", object will not get removed" << dendl;
       /* ignoring error, nothing we can do at this point */
@@ -11297,7 +11304,9 @@ int RGWRados::cls_obj_prepare_op(BucketShard& bs, RGWModifyOp op, string& tag,
   ObjectWriteOperation o;
   cls_rgw_obj_key key(obj.get_index_key_name(), obj.get_instance());
   cls_rgw_bucket_prepare_op(o, op, tag, key, obj.get_loc(), get_zone().log_data, bilog_flags);
+  ldout(cct, 3) << "cls_obj_prepare_op cls_rgw_bucket_prepare_op" << dendl;
   int r = bs.index_ctx.operate(bs.bucket_obj, &o);
+  ldout(cct, 3) << "cls_obj_prepare_op bs.index_ctx.operate ret=" << ret << dendl;
   return r;
 }
 

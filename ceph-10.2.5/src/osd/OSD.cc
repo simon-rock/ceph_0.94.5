@@ -9068,22 +9068,33 @@ int OSD::init_op_flags(OpRequestRef& op)
   op->rmw_flags = 0;
 
   // set bits based on op codes, called methods.
+  string ops_info = m->get_oid().name;
+  ops_info += "-";
   for (iter = m->ops.begin(); iter != m->ops.end(); ++iter) {
-    if (ceph_osd_op_mode_modify(iter->op.op))
+    string op_info;
+    if (ceph_osd_op_mode_modify(iter->op.op)){
       op->set_write();
-    if (ceph_osd_op_mode_read(iter->op.op))
+      op_info += "w_";
+    }
+    if (ceph_osd_op_mode_read(iter->op.op)){
       op->set_read();
+      op_info += "r_";
+    }
 
     // set READ flag if there are src_oids
-    if (iter->soid.oid.name.length())
+    if (iter->soid.oid.name.length()){
       op->set_read();
+      op_info += "sr_";
+    }
 
     // set PGOP flag if there are PG ops
     if (ceph_osd_op_type_pg(iter->op.op))
       op->set_pg_op();
 
-    if (ceph_osd_op_mode_cache(iter->op.op))
+    if (ceph_osd_op_mode_cache(iter->op.op)){
       op->set_cache();
+      op_info += "c_";
+    }
 
     // check for ec base pool
     int64_t poolid = m->get_pg().pool();
@@ -9155,10 +9166,16 @@ int OSD::init_op_flags(OpRequestRef& op)
                              << (is_write ? "w" : "")
                              << (is_promote ? "p" : "")
                  << dendl;
-	if (is_read)
+	if (is_read){
 	  op->set_class_read();
-	if (is_write)
+	  op_info += "ir_"; 
+	}
+
+	if (is_write){
 	  op->set_class_write();
+	  op_info += "iw_"; 
+	}
+	  
         if (is_promote)
           op->set_promote();
 	break;
@@ -9169,6 +9186,7 @@ int OSD::init_op_flags(OpRequestRef& op)
       // watch state (and may return early if the watch exists) or, in
       // the case of ping, is simply a read op.
       op->set_read();
+      op_info += "wa_";
       // fall through
     case CEPH_OSD_OP_NOTIFY:
     case CEPH_OSD_OP_NOTIFY_ACK:
@@ -9219,8 +9237,10 @@ int OSD::init_op_flags(OpRequestRef& op)
     default:
       break;
     }
+    ops_info += op_info;
+    ops_info += "|";
   }
-
+  dout(3) << __func__ << ops_info << dendl;
   if (op->rmw_flags == 0)
     return -EINVAL;
 

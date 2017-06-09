@@ -2414,6 +2414,7 @@ void RGWPutObj::execute()
   bool need_calc_md5 = (dlo_manifest == NULL) && (slo_info == NULL);
 
   perfcounter->inc(l_rgw_put);
+  ldout(s->cct, 3) << "RGWPutObj perfcounter inc " << dendl;
   op_ret = -EINVAL;
   if (s->object.empty()) {
     goto done;
@@ -2444,6 +2445,7 @@ void RGWPutObj::execute()
     op_ret = ceph_unarmor(supplied_md5_bin, &supplied_md5_bin[CEPH_CRYPTO_MD5_DIGESTSIZE + 1],
                        supplied_md5_b64, supplied_md5_b64 + strlen(supplied_md5_b64));
     ldout(s->cct, 15) << "ceph_armor ret=" << op_ret << dendl;
+    ldout(s->cct, 3) << "RGWPutObj supplied_md5_b64 "<< op_ret << dendl;
     if (op_ret != CEPH_CRYPTO_MD5_DIGESTSIZE) {
       op_ret = -ERR_INVALID_DIGEST;
       goto done;
@@ -2457,6 +2459,7 @@ void RGWPutObj::execute()
                             we also check sizes at the end anyway */
     op_ret = store->check_quota(s->bucket_owner.get_id(), s->bucket,
 				user_quota, bucket_quota, s->content_length);
+    ldout(s->cct, 3) << "RGWPutObj !chunked_upload "<< op_ret << dendl;
     if (op_ret < 0) {
       ldout(s->cct, 20) << "check_quota() returned ret=" << op_ret << dendl;
       goto done;
@@ -2477,12 +2480,14 @@ void RGWPutObj::execute()
                                           s->bucket_owner.get_id(),
                                           s->bucket_info,
                                           obj);
+    ldout(s->cct, 3) << "RGWPutObj ! multipart for swift API "<< op_ret << dendl;
     if (op_ret < 0) {
       return;
     }
   }
 
   op_ret = processor->prepare(store, NULL);
+  ldout(s->cct, 3) << "RGWPutObj processor->prepare " << op_ret <<dendl;
   if (op_ret < 0) {
     ldout(s->cct, 20) << "processor->prepare() returned ret=" << op_ret
 		      << dendl;
@@ -2519,6 +2524,7 @@ void RGWPutObj::execute()
 
     op_ret = put_data_and_throttle(processor, data, ofs,
 				  (need_calc_md5 ? &hash : NULL), need_to_wait);
+    ldout(s->cct, 3) << "RGWPutObj put_data_and_throttle " << op_ret <<dendl;
     if (op_ret < 0) {
       if (!need_to_wait || op_ret != -EEXIST) {
         ldout(s->cct, 20) << "processor->thottle_data() returned ret="
@@ -2556,7 +2562,7 @@ void RGWPutObj::execute()
 
     ofs += len;
   } while (len > 0);
-
+  ldout(s->cct, 3) << "RGWPutObj put_data_and_throttle finish" <<dendl;
   if (!chunked_upload &&
       ofs != s->content_length &&
       !s->aws4_auth_streaming_mode) {
@@ -2572,6 +2578,7 @@ void RGWPutObj::execute()
     /* complete aws4 auth */
 
     op_ret = RGW_Auth_S3::authorize_aws4_auth_complete(store, s);
+    ldout(s->cct, 3) << "RGWPutObj aws4_auth_needs_complete " << op_ret << dendl;
     if (op_ret) {
       goto done;
     }
@@ -2594,6 +2601,7 @@ void RGWPutObj::execute()
 
   op_ret = store->check_quota(s->bucket_owner.get_id(), s->bucket,
                               user_quota, bucket_quota, s->obj_size);
+  ldout(s->cct, 3) << "RGWPutObj check_quota " << op_ret << dendl;
   if (op_ret < 0) {
     ldout(s->cct, 20) << "second check_quota() returned op_ret=" << op_ret << dendl;
     goto done;
@@ -2601,6 +2609,7 @@ void RGWPutObj::execute()
 
   if (need_calc_md5) {
     processor->complete_hash(&hash);
+    ldout(s->cct, 3) << "RGWPutObj processor->complete_hash " << dendl;
   }
   hash.Final(m);
 
@@ -2623,7 +2632,7 @@ void RGWPutObj::execute()
       goto done;
     }
     complete_etag(hash, &etag);
-    ldout(s->cct, 10) << __func__ << ": calculated md5 for user manifest: " << etag << dendl;
+    ldout(s->cct, 3) << __func__ << ": calculated md5 for user manifest: " << etag << dendl;
   }
 
   if (slo_info) {
@@ -2633,7 +2642,7 @@ void RGWPutObj::execute()
 
     hash.Update((byte *)slo_info->raw_data, slo_info->raw_data_len);
     complete_etag(hash, &etag);
-    ldout(s->cct, 10) << __func__ << ": calculated md5 for user manifest: " << etag << dendl;
+    ldout(s->cct, 3) << __func__ << ": calculated md5 for user manifest: " << etag << dendl;
   }
 
   if (supplied_etag && etag.compare(supplied_etag) != 0) {
@@ -2642,7 +2651,7 @@ void RGWPutObj::execute()
   }
   bl.append(etag.c_str(), etag.size() + 1);
   emplace_attr(RGW_ATTR_ETAG, std::move(bl));
-
+  ldout(s->cct, 3) << "RGWPutObj emplace_attr " << dendl;
   for (iter = s->generic_attrs.begin(); iter != s->generic_attrs.end();
        ++iter) {
     bufferlist& attrbl = attrs[iter->first];
@@ -2652,7 +2661,7 @@ void RGWPutObj::execute()
 
   rgw_get_request_metadata(s->cct, s->info, attrs);
   encode_delete_at_attr(delete_at, attrs);
-
+  ldout(s->cct, 3) << "RGWPutObj rgw_get_request_metadata " << dendl;
   /* Add a custom metadata to expose the information whether an object
    * is an SLO or not. Appending the attribute must be performed AFTER
    * processing any input from user in order to prohibit overwriting. */
@@ -2661,7 +2670,7 @@ void RGWPutObj::execute()
     ::encode("True", slo_userindicator_bl);
     emplace_attr(RGW_ATTR_SLO_UINDICATOR, std::move(slo_userindicator_bl));
   }
-
+  ldout(s->cct, 3) << "start processor::complete" << dendl;
   op_ret = processor->complete(etag, &mtime, real_time(), attrs, delete_at,
 			      if_match, if_nomatch);
 

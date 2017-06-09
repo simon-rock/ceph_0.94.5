@@ -1588,7 +1588,7 @@ void ReplicatedPG::do_op(OpRequestRef& op)
 
   m->finish_decode();
   m->clear_payload();
-
+  dout(3) << "do_op finish decode&clear payload " << dendl;
   if (m->has_flag(CEPH_OSD_FLAG_PARALLELEXEC)) {
     // not implemented.
     osd->reply_op_error(op, -EINVAL);
@@ -1674,7 +1674,7 @@ void ReplicatedPG::do_op(OpRequestRef& op)
     osd->reply_op_error(op, -EBLACKLISTED);
     return;
   }
-
+  dout(3) << "do_op finish base check? " << dendl;
   // discard due to cluster full transition?  (we discard any op that
   // originates before the cluster or pool is marked full; the client
   // will resend after the full flag is removed or if they expect the
@@ -1732,7 +1732,7 @@ void ReplicatedPG::do_op(OpRequestRef& op)
 	   << " -> " << (write_ordered ? "write-ordered" : "read-ordered")
 	   << " flags " << ceph_osd_flag_string(m->get_flags())
 	   << dendl;
-
+  dout(3) << "do_op finish write_ordered " << dendl;
   if (write_ordered &&
       scrubber.write_blocked_by_scrub(head, get_sort_bitwise())) {
     dout(20) << __func__ << ": waiting for scrub" << dendl;
@@ -1740,19 +1740,19 @@ void ReplicatedPG::do_op(OpRequestRef& op)
     op->mark_delayed("waiting for scrub");
     return;
   }
-
+  dout(3) << "do_op no scrub " << dendl;
   // missing object?
   if (is_unreadable_object(head)) {
     wait_for_unreadable_object(head, op);
     return;
   }
-
+  dout(3) << "do_op no missing " << dendl;
   // degraded object?
   if (write_ordered && is_degraded_or_backfilling_object(head)) {
     wait_for_degraded_object(head, op);
     return;
   }
-
+  dout(3) << "do_op no degraded " << dendl;
   // blocked on snap?
   map<hobject_t, snapid_t>::iterator blocked_iter =
     objects_blocked_on_degraded_snap.find(head);
@@ -1775,7 +1775,7 @@ void ReplicatedPG::do_op(OpRequestRef& op)
     block_write_on_full_cache(head, op);
     return;
   }
-
+  dout(3) << "do_op no snap " << dendl;
   // missing snapdir?
   hobject_t snapdir = head.get_snapdir();
 
@@ -1783,13 +1783,13 @@ void ReplicatedPG::do_op(OpRequestRef& op)
     wait_for_unreadable_object(snapdir, op);
     return;
   }
-
+  dout(3) << "do_op no missing snapdir" << dendl;
   // degraded object?
   if (write_ordered && is_degraded_or_backfilling_object(snapdir)) {
     wait_for_degraded_object(snapdir, op);
     return;
   }
- 
+  dout(3) << "do_op no missing snapdir" << dendl;
   // asking for SNAPDIR is only ok for reads
   if (m->get_snapid() == CEPH_SNAPDIR && op->may_write()) {
     osd->reply_op_error(op, -EINVAL);
@@ -1832,7 +1832,7 @@ void ReplicatedPG::do_op(OpRequestRef& op)
       return;
     }
   }
-
+  dout(3) << "do_op no dup/replay " << dendl;
   ObjectContextRef obc;
   bool can_create = op->may_write() || op->may_cache();
   hobject_t missing_oid;
@@ -1848,12 +1848,12 @@ void ReplicatedPG::do_op(OpRequestRef& op)
       maybe_await_blocked_snapset(oid, op)) {
     return;
   }
-
+  dout(3) << "do_op no blocked on obc " << dendl;
   int r = find_object_context(
     oid, &obc, can_create,
     m->has_flag(CEPH_OSD_FLAG_MAP_SNAP_CLONE),
     &missing_oid);
-
+  dout(3) << "do_op find object ret=" << r << dendl;
   if (r == -EAGAIN) {
     // If we're not the primary of this OSD, and we have
     // CEPH_OSD_FLAG_LOCALIZE_READS set, we just return -EAGAIN. Otherwise,
@@ -1917,7 +1917,7 @@ void ReplicatedPG::do_op(OpRequestRef& op)
 			 false,
 			 in_hit_set))
     return;
-
+  dout(3) << "do_op handle cache? ret=" << r << dendl;
   if (r && (r != -ENOENT || !obc)) {
     // copy the reqids for copy get on ENOENT
     if (r == -ENOENT &&
@@ -1944,7 +1944,7 @@ void ReplicatedPG::do_op(OpRequestRef& op)
 		     << " on object " << oloc
 		     << " op " << *m << "\n";
   }
-
+  dout(3) << "do_op before block check of obc" << dendl;
   // io blocked on obc?
   if (obc->is_blocked() &&
       !m->has_flag(CEPH_OSD_FLAG_FLUSH)) {
@@ -2035,7 +2035,7 @@ void ReplicatedPG::do_op(OpRequestRef& op)
     }
     return;
   }
-
+  dout(3) << "do_op src_oids " << dendl;
   // any SNAPDIR op needs to have all clones present.  treat them as
   // src_obc's so that we track references properly and clean up later.
   if (m->get_snapid() == CEPH_SNAPDIR) {
@@ -2066,12 +2066,12 @@ void ReplicatedPG::do_op(OpRequestRef& op)
       }
     }
   }
-
+  dout(3) << "do_op no snapdir " << dendl;
   OpContext *ctx = new OpContext(op, m->get_reqid(), m->ops, obc, this);
 
   if (!obc->obs.exists)
     ctx->snapset_obc = get_object_context(obc->obs.oi.soid.get_snapdir(), false);
-
+  dout(3) << "do_op get snapset obc " << dendl;
   /* Due to obc caching, we might have a cached non-existent snapset_obc
    * for the snapdir.  If so, we can ignore it.  Subsequent parts of the
    * do_op pipeline make decisions based on whether snapset_obc is
@@ -2079,7 +2079,18 @@ void ReplicatedPG::do_op(OpRequestRef& op)
    */
   if (ctx->snapset_obc && !ctx->snapset_obc->obs.exists)
     ctx->snapset_obc = ObjectContextRef();
-
+  // get op type
+  string ot = "unknow";
+  if (write_ordered && ctx->op->may_read()) {
+    ot = "rwexcl";
+  } else if (write_ordered) {
+    ot = "rwwrite";
+  } else {
+    ot = "rwread";
+    assert(ctx->op->may_read());
+  }
+  //
+  dout(3) << "do_op start obc lock ---" << oid << "---" << ot << "---" << m->has_flag(CEPH_OSD_FLAG_RWORDERED) << "---"<< m->has_flag(CEPH_OSD_FLAG_SKIPRWLOCKS) << "---" << m->has_flag(CEPH_OSD_FLAG_FLUSH)<<dendl;
   if (m->has_flag(CEPH_OSD_FLAG_SKIPRWLOCKS)) {
     dout(20) << __func__ << ": skipping rw locks" << dendl;
   } else if (m->get_flags() & CEPH_OSD_FLAG_FLUSH) {
@@ -2099,7 +2110,7 @@ void ReplicatedPG::do_op(OpRequestRef& op)
     close_op_ctx(ctx);
     return;
   }
-
+  dout(3) << "do_op get obc lock or skip" << dendl;
   if (r) {
     dout(20) << __func__ << " returned an error: " << r << dendl;
     close_op_ctx(ctx);
