@@ -18,7 +18,8 @@
 #include <errno.h>
 
 #include "HashIndex.h"
-
+#include <iostream>
+using std::cout;
 #include "common/errno.h"
 #include "common/debug.h"
 #define dout_subsys ceph_subsys_filestore
@@ -149,7 +150,48 @@ int HashIndex::reset_attr(
   info.subdirs = subdirs.size();
   return set_info(path, info);
 }
+// only for debug or fix issue , add by simon
+int HashIndex::show_attr(
+			 const vector<string> &path, ///< [in] path to cleanup
+			                 bool reset
+			 ){
 
+  int exists = 0;
+  int r = path_exists(path, &exists);
+  if (r < 0)
+    return r;
+  if (!exists)
+    return 0;
+  map<string, ghobject_t> objects;
+  vector<string> subdirs;
+  r = list_objects(path, 0, 0, &objects);
+  cout << "-simon-" << __func__ << " r="<< r << " object_size=" << objects.size() <<std::endl;
+  if (r < 0)
+    return r;
+  r = list_subdirs(path, &subdirs);
+  cout << "-simon-" << __func__ << " r="<< r << " subdirs_size=" << subdirs.size() <<std::endl;
+  if (r < 0)
+    return r;
+  if (reset){
+
+    subdir_info_s info;
+    info.hash_level = path.size();
+    info.objs = objects.size();
+    info.subdirs = subdirs.size();
+    return set_info(path, info);
+  }
+  else{
+
+    subdir_info_s info;
+    get_info(path, &info);
+    cout << "-simon-" << __func__ << " r="<< r << " have_level="<< info.hash_level << " info.objs="<< info.objs << " info.subdirs=" << info.subdirs <<std::endl;
+    info.hash_level = path.size();
+    info.objs = objects.size();
+    info.subdirs = subdirs.size();
+    return 0;
+  }
+
+}
 int HashIndex::col_split_level(
   HashIndex &from,
   HashIndex &to,

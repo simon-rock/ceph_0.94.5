@@ -31,7 +31,8 @@
 #include "common/ceph_crypto.h"
 #include "include/compat.h"
 #include "chain_xattr.h"
-
+#include <iostream>
+using std::cout;
 #include "LFNIndex.h"
 using ceph::crypto::SHA1;
 
@@ -511,6 +512,7 @@ int LFNIndex::remove_path(const vector<string> &to_remove)
 int LFNIndex::path_exists(const vector<string> &to_check, int *exists)
 {
   string full_path = get_full_path_subdir(to_check);
+  dout(10) << "-simon-" << __func__ << " -- full_path= " << full_path << dendl;
   struct stat buf;
   if (::stat(full_path.c_str(), &buf)) {
     int r = -errno;
@@ -550,6 +552,7 @@ int LFNIndex::get_attr_path(const vector<string> &path,
     &bp);
   if (r > 0)
     attr_value.push_back(bp);
+  cout << "-simon-" << __func__ << " -- " << full_path << " path_size "<< path.size() << " attr_name " << attr_name<< " attr_value " << attr_value << std::endl;
   return r;
 }
 
